@@ -1020,7 +1020,7 @@ async def randomword_command(interaction: discord.Interaction) -> None:
 
 @app_commands.command(
     name="grammar",
-    description="Check the grammar of a sentence."
+    description="Check and correct grammar and punctuation."
 )
 @app_commands.describe(sentence="The sentence you want Dead Letter to check.")
 async def grammar_command(
@@ -1029,26 +1029,22 @@ async def grammar_command(
 ) -> None:
     await interaction.response.defer(thinking=True)
 
-    url = "https://api.languagetool.org/v2/check"
-    payload = {
-        "text": sentence,
-        "language": "en-US"
-    }
+    original = sentence.strip()
+    corrected = original
 
     try:
+        # Use LanguageTool first.
+        url = "https://api.languagetool.org/v2/check"
+        payload = {
+            "text": corrected,
+            "language": "en-US"
+        }
+
         async with aiohttp.ClientSession() as session:
             async with session.post(url, data=payload) as response:
                 data = await response.json()
 
         matches = data.get("matches", [])
-
-        if not matches:
-            await interaction.followup.send(
-                f"**Dead Letter:** I found no grammar errors in:\n\n{sentence}"
-            )
-            return
-
-        corrected = sentence
 
         for match in reversed(matches):
             replacements = match.get("replacements", [])
@@ -1061,9 +1057,135 @@ async def grammar_command(
                     + corrected[end:]
                 )
 
+        # Capitalize the beginning.
+        if corrected:
+            corrected = corrected[0].upper() + corrected[1:]
+
+        # Capitalize standalone "i".
+        corrected = re.sub(r"\bi\b", "I", corrected)
+
+        # Fix common missing apostrophes.
+        contractions = {
+            r"\bdont\b": "don't",
+            r"\bdoesnt\b": "doesn't",
+            r"\bdidnt\b": "didn't",
+            r"\bcant\b": "can't",
+            r"\bcouldnt\b": "couldn't",
+            r"\bwouldnt\b": "wouldn't",
+            r"\bshouldnt\b": "shouldn't",
+            r"\bwont\b": "won't",
+            r"\bisnt\b": "isn't",
+            r"\barent\b": "aren't",
+            r"\bwasnt\b": "wasn't",
+            r"\bwerent\b": "weren't",
+            r"\bhasnt\b": "hasn't",
+            r"\bhavent\b": "haven't",
+            r"\bhadnt\b": "hadn't",
+            r"\bim\b": "I'm",
+            r"\bive\b": "I've",
+            r"\bill\b": "I'll",
+            r"\bid\b": "I'd",
+        }
+
+        for pattern, replacement in contractions.items():
+            corrected = re.sub(
+                pattern,
+                replacement,
+                corrected,
+                flags=re.IGNORECASE
+            )
+
+        # Fix several common grammar mistakes.
+        corrected = re.sub(
+            r"\bwhen I seen\b",
+            "when I saw",
+            corrected,
+            flags=re.IGNORECASE
+        )
+
+        corrected = re.sub(
+            r"\bI seen\b",
+            "I saw",
+            corrected,
+            flags=re.IGNORECASE
+        )
+
+        corrected = re.sub(
+            r"\bthey was\b",
+            "they were",
+            corrected,
+            flags=re.IGNORECASE
+        )
+
+        corrected = re.sub(
+            r"\byou was\b",
+            "you were",
+            corrected,
+            flags=re.IGNORECASE
+        )
+
+        corrected = re.sub(
+            r"\bwe was\b",
+            "we were",
+            corrected,
+            flags=re.IGNORECASE
+        )
+
+        corrected = re.sub(
+            r"\bdidn't say nothing\b",
+            "didn't say anything",
+            corrected,
+            flags=re.IGNORECASE
+        )
+
+        # Add commas before "but" and "yet".
+        corrected = re.sub(
+            r"(?<![,;])\s+(but|yet)\s+",
+            r", \1 ",
+            corrected,
+            flags=re.IGNORECASE
+        )
+
+        # Add commas after common introductory clauses.
+        intro_pattern = (
+            r"^(When|While|Although|Because|Before|After|If|Unless|"
+            r"Whenever|Once|Since)\b(.{3,80}?)"
+            r"\b(he|she|they|we|I|you|it)\b"
+        )
+
+        intro_match = re.match(
+            intro_pattern,
+            corrected,
+            flags=re.IGNORECASE
+        )
+
+        if intro_match:
+            intro_end = intro_match.start(3)
+            before = corrected[:intro_end].rstrip()
+
+            if not before.endswith(","):
+                corrected = before + ", " + corrected[intro_end:]
+
+        # Clean spacing around punctuation.
+        corrected = re.sub(r"\s+,", ",", corrected)
+        corrected = re.sub(r",([^\s])", r", \1", corrected)
+        corrected = re.sub(r"\s{2,}", " ", corrected)
+
+        # Add ending punctuation.
+        if corrected and corrected[-1] not in ".!?":
+            corrected += "."
+
+        if corrected == original:
+            await interaction.followup.send(
+                f"**Dead Letter:** I didn't find anything that clearly needs correcting.\n\n"
+                f"**Sentence:**\n{original}"
+            )
+            return
+
         await interaction.followup.send(
-            f"**Original:**\n{sentence}\n\n"
-            f"**Suggested:**\n{corrected}"
+            f"**Original:**\n{original}\n\n"
+            f"**Corrected:**\n{corrected}\n\n"
+            f"*Check the suggestion against your intended meaning and writing style.*"
         )
 
     except Exception:
