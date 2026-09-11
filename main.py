@@ -846,6 +846,7 @@ class DeadLetter(commands.Bot):
         self.tree.add_command(synonym_command)
         self.tree.add_command(antonym_command)
         self.tree.add_command(randomword_command)
+        self.tree.add_command(grammar_command)
         synced = await self.tree.sync()
         LOG.info(
             "Global application commands synced: %s",
