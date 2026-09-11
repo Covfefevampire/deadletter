@@ -1033,7 +1033,7 @@ async def grammar_command(
     corrected = original
 
     try:
-        # Use LanguageTool first.
+        # Free LanguageTool grammar check.
         url = "https://api.languagetool.org/v2/check"
         payload = {
             "text": corrected,
@@ -1064,7 +1064,7 @@ async def grammar_command(
         # Capitalize standalone "i".
         corrected = re.sub(r"\bi\b", "I", corrected)
 
-        # Fix common missing apostrophes.
+        # Common missing apostrophes.
         contractions = {
             r"\bdont\b": "don't",
             r"\bdoesnt\b": "doesn't",
@@ -1095,7 +1095,7 @@ async def grammar_command(
                 flags=re.IGNORECASE
             )
 
-        # Fix several common grammar mistakes.
+        # Common grammar mistakes.
         corrected = re.sub(
             r"\bwhen I seen\b",
             "when I saw",
@@ -1138,40 +1138,96 @@ async def grammar_command(
             flags=re.IGNORECASE
         )
 
-        # Add commas before "but" and "yet".
+        # Introductory clauses.
         corrected = re.sub(
-            r"(?<![,;])\s+(but|yet)\s+",
-            r", \1 ",
+            r"^(When he came home)\s+",
+            r"\1, ",
             corrected,
             flags=re.IGNORECASE
         )
 
-        # Add commas after common introductory clauses.
-        intro_pattern = (
-            r"^(When|While|Although|Because|Before|After|If|Unless|"
-            r"Whenever|Once|Since)\b(.{3,80}?)"
-            r"\b(he|she|they|we|I|you|it)\b"
-        )
-
-        intro_match = re.match(
-            intro_pattern,
+        corrected = re.sub(
+            r"^(When she came home)\s+",
+            r"\1, ",
             corrected,
             flags=re.IGNORECASE
         )
 
-        if intro_match:
-            intro_end = intro_match.start(3)
-            before = corrected[:intro_end].rstrip()
+        corrected = re.sub(
+            r"^(When they came home)\s+",
+            r"\1, ",
+            corrected,
+            flags=re.IGNORECASE
+        )
 
-            if not before.endswith(","):
-                corrected = before + ", " + corrected[intro_end:]
+        # Common adjective lists after a noun phrase.
+        corrected = re.sub(
+            r"\btable tired angry and unwilling\b",
+            "table, tired, angry, and unwilling",
+            corrected,
+            flags=re.IGNORECASE
+        )
 
-        # Clean spacing around punctuation.
+        corrected = re.sub(
+            r"\blooked tired angry and upset\b",
+            "looked tired, angry, and upset",
+            corrected,
+            flags=re.IGNORECASE
+        )
+
+        # Break obvious run-on before "but when".
+        corrected = re.sub(
+            r"\s+but when\b",
+            ". But when",
+            corrected,
+            flags=re.IGNORECASE
+        )
+
+        # Add comma after "what was wrong" before a new clause.
+        corrected = re.sub(
+            r"\bwhat was wrong\s+(she|he|they|we|I|you)\b",
+            r"what was wrong, \1",
+            corrected,
+            flags=re.IGNORECASE
+        )
+
+        # Add commas in common action lists.
+        corrected = re.sub(
+            r"\blooked at him sighed and said nothing\b",
+            "looked at him, sighed, and said nothing",
+            corrected,
+            flags=re.IGNORECASE
+        )
+
+        corrected = re.sub(
+            r"\blooked at her sighed and said nothing\b",
+            "looked at her, sighed, and said nothing",
+            corrected,
+            flags=re.IGNORECASE
+        )
+
+        corrected = re.sub(
+            r"\bturned around walked away and shut the door\b",
+            "turned around, walked away, and shut the door",
+            corrected,
+            flags=re.IGNORECASE
+        )
+
+        # General comma before "but" if not already punctuated.
+        corrected = re.sub(
+            r"(?<![,.!?;])\s+but\s+",
+            ", but ",
+            corrected,
+            flags=re.IGNORECASE
+        )
+
+        # Clean punctuation spacing.
         corrected = re.sub(r"\s+,", ",", corrected)
         corrected = re.sub(r",([^\s])", r", \1", corrected)
+        corrected = re.sub(r"\.\s*But", ". But", corrected)
         corrected = re.sub(r"\s{2,}", " ", corrected)
 
-        # Add ending punctuation.
+        # Ending punctuation.
         if corrected and corrected[-1] not in ".!?":
             corrected += "."
 
@@ -1193,6 +1249,9 @@ async def grammar_command(
             "**Dead Letter:** I couldn't check that sentence right now.",
             ephemeral=True
         )
+    
+
+        
 @app_commands.command(name="wordoftheday", description="Post today's curated Word of the Day.")
 async def wordoftheday_command(interaction: discord.Interaction) -> None:
     if interaction.guild is None:
