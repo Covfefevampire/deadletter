@@ -1017,7 +1017,59 @@ async def randomword_command(interaction: discord.Interaction) -> None:
     word = bot.choose_random_writing_word(scope)
     await interaction.response.send_message(embed=make_random_word_embed(word))
 
+@app_commands.command(
+    name="grammar",
+    description="Check the grammar of a sentence."
+)
+@app_commands.describe(sentence="The sentence you want Dead Letter to check.")
+async def grammar_command(
+    interaction: discord.Interaction,
+    sentence: str
+) -> None:
+    await interaction.response.defer(thinking=True)
 
+    url = "https://api.languagetool.org/v2/check"
+    payload = {
+        "text": sentence,
+        "language": "en-US"
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, data=payload) as response:
+                data = await response.json()
+
+        matches = data.get("matches", [])
+
+        if not matches:
+            await interaction.followup.send(
+                f"**Dead Letter:** I found no grammar errors in:\n\n{sentence}"
+            )
+            return
+
+        corrected = sentence
+
+        for match in reversed(matches):
+            replacements = match.get("replacements", [])
+            if replacements:
+                start = match["offset"]
+                end = start + match["length"]
+                corrected = (
+                    corrected[:start]
+                    + replacements[0]["value"]
+                    + corrected[end:]
+                )
+
+        await interaction.followup.send(
+            f"**Original:**\n{sentence}\n\n"
+            f"**Suggested:**\n{corrected}"
+        )
+
+    except Exception:
+        await interaction.followup.send(
+            "**Dead Letter:** I couldn't check that sentence right now.",
+            ephemeral=True
+        )
 @app_commands.command(name="wordoftheday", description="Post today's curated Word of the Day.")
 async def wordoftheday_command(interaction: discord.Interaction) -> None:
     if interaction.guild is None:
